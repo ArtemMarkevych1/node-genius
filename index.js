@@ -9,13 +9,6 @@ const { Task } = require("./models/taskModel");
 
 require("./config/db");
 
-// Connect to MongoDB
-
-mongoose.connect(URI, {
-  user: USER,
-  pass: DB_PASSWORD,
-});
-
 app.use(bodyParser.json());
 
 // Helper functions
@@ -26,7 +19,7 @@ function checkExist(task) {
 }
 
 function serverError(res, err) {
-  res.status(500).json({ error: err });
+  return res.status(500).json({ error: err });
 }
 
 function getObjectId(id) {
