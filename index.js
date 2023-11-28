@@ -5,7 +5,9 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const User = require("./models/userModel");
+const jwt = require("jsonwebtoken");
 require("./config/db");
+require('dotenv').config();
 
 const app = express();
 const port = 3000;
@@ -40,12 +42,9 @@ app.post("/register", async (req, res, next) => {
       return res.status(400).json({ message: "Invalid email address" });
     }
     if (!pass || !isValidPassword(pass)) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Invalid password",
-        });
+      return res.status(400).json({
+        message: "Invalid password",
+      });
     }
     if (!role) {
       return res.status(400).json({ message: "Role is required" });
@@ -81,33 +80,31 @@ app.post("/register", async (req, res, next) => {
 });
 
 app.post("/login", async (req, res, next) => {
-  const { email, password } = req.body;
-
   try {
     // Find user by email
+    const { email, password: pass } = req.body;
+
     const user = await User.findOne({ email });
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Compare passwords
-
-    const isMatch = await bcrypt.compare(password, user.password);
+    // Check if the password matches
+    const isMatch = await bcrypt.compare(pass, user.password);
     if (!isMatch) {
-      return res.status(401).json({
-        message: "Incorrect password",
-      });
+      return res.status(401).json({ message: "Incorrect password" });
     }
 
     // Omit sensitive data from response
     const { password, ...userData } = user._doc;
 
-    // Generate access token
+    // Generate access token with expiration time
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
-    // Send response
+    // Send response with user data and access token
     res.status(200).json({ ...userData, token });
   } catch (error) {
     next(error);

@@ -80,3 +80,6 @@ public
 
 # Add the secret file
 secret.js
+
+# Add env file
+.env
