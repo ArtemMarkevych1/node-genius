@@ -13,7 +13,8 @@ const port = 3000;
 app.use(bodyParser.json());
 
 function isValidEmail(email) {
-  const regex = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  const regex =
+    /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
   return regex.test(email);
 }
 
@@ -39,7 +40,12 @@ app.post("/register", async (req, res, next) => {
       return res.status(400).json({ message: "Invalid email address" });
     }
     if (!pass || !isValidPassword(pass)) {
-      return res.status(400).json({ message: "Password is not valid. It must be at least 6 characters long and contain at least one digit, one lowercase letter, and one uppercase letter." });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid password",
+        });
     }
     if (!role) {
       return res.status(400).json({ message: "Role is required" });
@@ -69,6 +75,40 @@ app.post("/register", async (req, res, next) => {
 
     // Send response
     res.status(201).json(userData);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/login", async (req, res, next) => {
+  const { email, password } = req.body;
+
+  try {
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Compare passwords
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        message: "Incorrect password",
+      });
+    }
+
+    // Omit sensitive data from response
+    const { password, ...userData } = user._doc;
+
+    // Generate access token
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    // Send response
+    res.status(200).json({ ...userData, token });
   } catch (error) {
     next(error);
   }
