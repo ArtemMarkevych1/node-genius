@@ -3,6 +3,8 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
+const User = require("./models/userModel");
 require("./config/db");
 
 const app = express();
@@ -10,87 +12,42 @@ const port = 3000;
 
 app.use(bodyParser.json());
 
-// Helper functions
-function checkExist(task) {
-  if (!task) {
-    return res.status(404).json({ message: "Task not found" });
-  }
-}
-
-function serverError(res, err) {
-  return res.status(500).json({ error: err });
-}
-
-function getObjectId(id) {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new Error("Invalid task ID");
-  }
-  return new mongoose.Types.ObjectId(id);
-}
-
 // Routes
-app.get("/", (req, res) => {
-  res.status(200).send("Hello World!");
-});
 
-app.get("/tasks", async (req, res) => {
-  try {
-    const tasks = await Task.find();
-    res.status(200).json(tasks);
-  } catch (err) {
-    serverError(res, err);
-  }
-});
+app.post("/register", async (req, res, next) => {
 
-app.get("/tasks/:id", async (req, res) => {
-  try {
-    const taskId = getObjectId(req.params.id);
-    const task = await Task.findById(taskId);
-    checkExist(task);
-    res.status(200).json(task);
-  } catch (err) {
-    serverError(res, err);
-  }
-});
-
-app.post("/tasks", async (req, res) => {
-  const { text, priority } = req.body;
+  const { firstName, lastName, email, password, role } = req.body;
 
   try {
-    const task = await Task.create({ text, priority });
-    res.status(201).json(task);
-  } catch (err) {
-    serverError(res, err);
+    
+    // Validate input
+    if(!firstName || !lastName || !email || !password || !role) {
+      return res.status(400).json({message: 'All fields are required'});
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(password, salt);
+
+    // Create user
+    const user = await User.create({
+      firstName, 
+      lastName,
+      email,
+      password: hash,
+      role 
+    });
+
+    // Omit sensitive data from response
+    const {password, ...userData} = user._doc;
+
+    // Send response
+    res.status(201).json(userData);
+
+  } catch (error) {
+    next(error);
   }
-});
 
-app.put("/tasks/:id", async (req, res) => {
-  const { text, priority } = req.body;
-  const taskId = getObjectId(req.params.id);
-
-  try {
-    const task = await Task.findByIdAndUpdate(
-      taskId,
-      { text, priority },
-      { new: true }
-    );
-    checkExist(task);
-    res.status(200).json(task);
-  } catch (err) {
-    serverError(res, err);
-  }
-});
-
-app.delete("/tasks/:id", async (req, res) => {
-  const taskId = getObjectId(req.params.id);
-
-  try {
-    const task = await Task.findByIdAndDelete(taskId);
-    checkExist(task);
-    res.status(204).send();
-  } catch (err) {
-    serverError(res, err);
-  }
 });
 
 app.listen(port, () => console.log(`Server started on port ${port}`));
