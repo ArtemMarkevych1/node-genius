@@ -1,98 +1,104 @@
-const express = require('express');
+// MongoDB
+
+const express = require("express");
 const app = express();
-
-const sqlite3 = require("sqlite3")
+const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
-const db = new sqlite3.Database("tasks.db");
+const { URI, DB_PASSWORD, USER } = require("./config/secret");
+const { Task } = require("./models/taskModel");
 
-const port = 3000;
+require("./config/db");
 
-app.use(bodyParser.json())
+// Connect to MongoDB
 
-function checkExist(task, res) {
+mongoose.connect(URI, {
+  user: USER,
+  pass: DB_PASSWORD,
+});
+
+app.use(bodyParser.json());
+
+// Helper functions
+function checkExist(task) {
   if (!task) {
-    return res.status(404).send('Task not found');
+    return res.status(404).json({ message: "Task not found" });
   }
 }
 
-function serverError(res, error) {
-  if (error) {
-    res.status(500).json({ error: error.message });
-  }
+function serverError(res, err) {
+  res.status(500).json({ error: err });
 }
 
+function getObjectId(id) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error("Invalid task ID");
+  }
+  return new mongoose.Types.ObjectId(id);
+}
 
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS tasks (
-      id INTEGER PRIMARY KEY,
-      text TEXT,
-      priority TEXT
-    )
-  `);
+// Routes
+app.get("/", (req, res) => {
+  res.status(200).send("Hello World!");
 });
 
-app.get('/', (req, res) => {
-  res.send('Hello World!');
+app.get("/tasks", async (req, res) => {
+  try {
+    const tasks = await Task.find();
+    res.status(200).json(tasks);
+  } catch (err) {
+    serverError(res, err);
+  }
 });
 
-app.get("/tasks", (req, res) => {
-  db.all("SELECT * FROM tasks", (error, rows) => {
-    serverError(res, error);
-    res.json(rows);
-  });
+app.get("/tasks/:id", async (req, res) => {
+  try {
+    const taskId = getObjectId(req.params.id);
+    const task = await Task.findById(taskId);
+    checkExist(task);
+    res.status(200).json(task);
+  } catch (err) {
+    serverError(res, err);
+  }
 });
 
-// GET SINGLE TASK
-app.get("/tasks/:id", (req, res) => {
-  const id = parseInt(req.params.id);
-
-  db.get("SELECT * FROM tasks WHERE id = ?", [id], (error, row) => {
-    serverError(res, error);
-    checkExist(row, id);
-    res.json(row);
-  });
-});
-
-// CREATE TASK
-app.post("/tasks", (req, res) => {
+app.post("/tasks", async (req, res) => {
   const { text, priority } = req.body;
 
-  db.run(
-    "INSERT INTO tasks (text, priority) VALUES (?, ?)",
-    [text, priority],
-    function (error) {
-      serverError(res, error);
-      res.status(201).json({ id: this.lastID });
-    }
-  );
+  try {
+    const task = await Task.create({ text, priority });
+    res.status(201).json(task);
+  } catch (err) {
+    serverError(res, err);
+  }
 });
 
-// UPDATE TASK
-app.put("/tasks/:id", (req, res) => {
+app.put("/tasks/:id", async (req, res) => {
   const { text, priority } = req.body;
-  const id = parseInt(req.params.id);
+  const taskId = getObjectId(req.params.id);
 
-  db.run(
-    `UPDATE tasks SET text = ?, priority = ? WHERE id = ?`,
-    [text, priority, id],
-    function (error) {
-      serverError(res, error);
-      res.sendStatus(200).json({id, text});
-    }
-  );
+  try {
+    const task = await Task.findByIdAndUpdate(
+      taskId,
+      { text, priority },
+      { new: true }
+    );
+    checkExist(task);
+    res.status(200).json(task);
+  } catch (err) {
+    serverError(res, err);
+  }
 });
 
-// DELETE TASK
-app.delete("/tasks/:id", (req, res) => {
-  const id = parseInt(req.params.id);
+app.delete("/tasks/:id", async (req, res) => {
+  const taskId = getObjectId(req.params.id);
 
-  db.run("DELETE FROM tasks WHERE id = ?", [id], function (error) {
-    serverError(res, error);
-    res.send(204);
-  });
+  try {
+    const task = await Task.findByIdAndDelete(taskId);
+    checkExist(task);
+    res.status(204).send();
+  } catch (err) {
+    serverError(res, err);
+  }
 });
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-});
+app.listen(3000, () => console.log("Server started"));
